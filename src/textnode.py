@@ -1,6 +1,7 @@
 import re
 from enum import Enum
 from htmlnode import LeafNode
+from htmlnode import ParentNode, LeafNode
 
 class TextType(Enum):
     TEXT = "text"
@@ -9,6 +10,14 @@ class TextType(Enum):
     CODE = "code"
     LINK = "link"
     IMAGE = "image"
+
+class BlockType(Enum):
+    PARAGRAPH = "paragraph"
+    HEADING = "heading"
+    CODE = "code"
+    QUOTE = "quote"
+    UNORDERED_LIST = "unordered_list"
+    ORDERED_LIST = "ordered_list"
 
 class TextNode():
     def __init__(self, text, text_type, url=None):
@@ -42,12 +51,19 @@ def text_node_to_html_node(text_node):
 def split_nodes_delimiter(old_nodes, delimiter, text_type):
     new_nodes = []
     for old_node in old_nodes:
-        value_list = old_node.text.split(delimiter)
-        for i in range(len(value_list)):
-            if i == 1:
-                new_nodes.append(TextNode(value_list[i], text_type))
+        if old_node.text_type != TextType.TEXT:
+            new_nodes.append(old_node)
+            continue
+
+        parts = old_node.text.split(delimiter)
+        for i, part in enumerate(parts):
+            if part == "":
+                new_nodes.append(TextNode(part, TextType.TEXT))
+            elif i % 2 == 1:
+                new_nodes.append(TextNode(part, text_type))
             else:
-                new_nodes.append(TextNode(value_list[i], TextType.TEXT))
+                new_nodes.append(TextNode(part, TextType.TEXT))
+
     return new_nodes
 
 def split_nodes_image(old_nodes):
@@ -127,3 +143,110 @@ def text_to_textnodes(text):
     nodes = split_nodes_link(nodes)
 
     return nodes
+
+def markdown_to_blocks(text):
+    split_list = text.split("\n\n")
+    result_list = []
+    for item in split_list:
+        result_list.append(item.strip())
+    return result_list
+
+def block_to_block_type(text):
+    if text.startswith("#"):
+        return BlockType.HEADING
+    elif text.startswith("```"):
+        return BlockType.CODE
+    elif text.startswith(">"):
+        return BlockType.QUOTE
+    elif text.startswith("- "):
+        return BlockType.UNORDERED_LIST
+    elif bool(re.match(r"\d+\.\s", text)):
+        return BlockType.ORDERED_LIST
+    else:
+        return BlockType.PARAGRAPH
+
+def markdown_to_html_node(markdown):
+    markdown_blocks = markdown_to_blocks(markdown)
+
+    def text_to_children(text):
+        """Convert inline markdown text to a list of HTMLNode children."""
+        # collapse internal newlines into spaces for inline parsing
+        text = text.replace("\n", " ").strip()
+        text_nodes = text_to_textnodes(text)
+        # filter out empty plain text nodes to avoid creating LeafNodes with empty values
+        filtered = [tn for tn in text_nodes if not (tn.text == "" and tn.text_type == TextType.TEXT)]
+        return [text_node_to_html_node(tn) for tn in filtered]
+
+    children = []
+
+    for block in markdown_blocks:
+        block_type = block_to_block_type(block)
+
+        if block_type == BlockType.HEADING:
+            # count leading # characters
+            match = re.match(r"^(#{1,6})\s*(.*)", block)
+            if match:
+                level = min(6, len(match.group(1)))
+                heading_text = match.group(2).strip()
+            else:
+                level = 1
+                heading_text = block
+
+            node = ParentNode(f"h{level}", text_to_children(heading_text))
+            children.append(node)
+
+        elif block_type == BlockType.CODE:
+            # strip the surrounding ``` lines
+            lines = block.splitlines()
+            if len(lines) >= 2 and lines[0].startswith("```"):
+                # take everything between the fence lines
+                code_text = "\n".join(lines[1:-1])
+                # ensure trailing newline as tests expect
+                if not code_text.endswith("\n"):
+                    code_text = code_text + "\n"
+            else:
+                code_text = block
+
+            # code block should not be inline-parsed
+            code_leaf = LeafNode(None, code_text)
+            code_node = ParentNode("code", [code_leaf])
+            pre_node = ParentNode("pre", [code_node])
+            children.append(pre_node)
+
+        elif block_type == BlockType.QUOTE:
+            # remove leading '>' characters and wrap in blockquote
+            lines = [re.sub(r"^>\s?", "", ln) for ln in block.splitlines()]
+            quote_text = "\n".join(lines).strip()
+            p_children = text_to_children(quote_text)
+            if p_children:
+                p_node = ParentNode("p", p_children)
+                blockquote_node = ParentNode("blockquote", [p_node])
+                children.append(blockquote_node)
+
+        elif block_type == BlockType.UNORDERED_LIST:
+            # split lines and create <ul> with <li>
+            items = []
+            for line in block.splitlines():
+                item_text = re.sub(r"^[-]\s+", "", line).strip()
+                li_children = text_to_children(item_text)
+                items.append(ParentNode("li", li_children))
+            ul = ParentNode("ul", items)
+            children.append(ul)
+
+        elif block_type == BlockType.ORDERED_LIST:
+            items = []
+            for line in block.splitlines():
+                item_text = re.sub(r"^\d+\.\s+", "", line).strip()
+                li_children = text_to_children(item_text)
+                items.append(ParentNode("li", li_children))
+            ol = ParentNode("ol", items)
+            children.append(ol)
+
+        else:
+            # paragraph
+            p_children = text_to_children(block)
+            if p_children:
+                p_node = ParentNode("p", p_children)
+                children.append(p_node)
+
+    return ParentNode("div", children)
