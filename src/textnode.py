@@ -245,6 +245,14 @@ def paragraph_to_html_node(block):
     return ParentNode("p", text_to_children(block))
 
 
+def extract_title(markdown: str) -> str:
+    for line in markdown.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped.lstrip("# ").strip()
+    raise Exception("No h1 header found in markdown")
+
+
 def markdown_to_html_node(markdown):
     markdown_blocks = markdown_to_blocks(markdown)
     children = []

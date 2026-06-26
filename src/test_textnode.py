@@ -377,5 +377,19 @@ the **same** even with inline stuff
             '<div><p>A <a href="https://boot.dev">link</a> and <img src="https://example.com/a.png" alt="img"></p></div>',
         )
 
+    def test_extract_title(self):
+        self.assertEqual("Hello", extract_title("# Hello"))
+        self.assertEqual("Hello", extract_title("  # Hello  "))
+        self.assertEqual("Tolkien Fan Club", extract_title("# Tolkien Fan Club\n\nSome content"))
+
+    def test_extract_title_ignores_h2(self):
+        md = "## Not the title\n\n# The Real Title"
+        self.assertEqual("The Real Title", extract_title(md))
+
+    def test_extract_title_raises(self):
+        with self.assertRaises(Exception) as ctx:
+            extract_title("No heading here")
+        self.assertIn("No h1 header", str(ctx.exception))
+
 if __name__ == "__main__":
     unittest.main()
