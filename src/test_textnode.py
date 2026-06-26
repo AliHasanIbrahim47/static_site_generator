@@ -232,6 +232,54 @@ class TestTextNode(unittest.TestCase):
             text_to_textnodes("plain text only"),
         )
 
+    def test_block_to_block_type_heading(self):
+        self.assertEqual(BlockType.HEADING, block_to_block_type("# Heading 1"))
+        self.assertEqual(BlockType.HEADING, block_to_block_type("###### Heading 6"))
+        self.assertEqual(BlockType.PARAGRAPH, block_to_block_type("#No space"))
+        self.assertEqual(BlockType.PARAGRAPH, block_to_block_type("####### Too many"))
+
+    def test_block_to_block_type_code(self):
+        block = "```\ncode line 1\ncode line 2\n```"
+        self.assertEqual(BlockType.CODE, block_to_block_type(block))
+        self.assertEqual(BlockType.PARAGRAPH, block_to_block_type("```inline code```"))
+
+    def test_block_to_block_type_quote(self):
+        self.assertEqual(
+            BlockType.QUOTE,
+            block_to_block_type("> quote line 1\n> quote line 2"),
+        )
+        self.assertEqual(BlockType.QUOTE, block_to_block_type(">no space after"))
+        self.assertEqual(
+            BlockType.PARAGRAPH,
+            block_to_block_type("> quote line 1\nnot a quote"),
+        )
+
+    def test_block_to_block_type_unordered_list(self):
+        self.assertEqual(
+            BlockType.UNORDERED_LIST,
+            block_to_block_type("- item 1\n- item 2"),
+        )
+        self.assertEqual(BlockType.UNORDERED_LIST, block_to_block_type("- single item"))
+        self.assertEqual(BlockType.PARAGRAPH, block_to_block_type("-no space"))
+
+    def test_block_to_block_type_ordered_list(self):
+        self.assertEqual(
+            BlockType.ORDERED_LIST,
+            block_to_block_type("1. first\n2. second\n3. third"),
+        )
+        self.assertEqual(BlockType.ORDERED_LIST, block_to_block_type("1. only item"))
+        self.assertEqual(
+            BlockType.PARAGRAPH,
+            block_to_block_type("1. first\n3. skipped"),
+        )
+
+    def test_block_to_block_type_paragraph(self):
+        self.assertEqual(BlockType.PARAGRAPH, block_to_block_type("Just a paragraph."))
+        self.assertEqual(
+            BlockType.PARAGRAPH,
+            block_to_block_type("Line one\nLine two"),
+        )
+
     def test_markdown_to_blocks(self):
         md = """
 This is **bolded** paragraph
@@ -282,6 +330,51 @@ the **same** even with inline stuff
         self.assertEqual(
             html,
             "<div><pre><code>This is text that _should_ remain\nthe **same** even with inline stuff\n</code></pre></div>",
+        )
+
+    def test_headings(self):
+        md = "# Heading 1\n\n## Heading 2\n\n###### Heading 6"
+        html = markdown_to_html_node(md).to_html()
+        self.assertEqual(
+            html,
+            "<div><h1>Heading 1</h1><h2>Heading 2</h2><h6>Heading 6</h6></div>",
+        )
+
+    def test_heading_with_inline(self):
+        md = "# Title with **bold**"
+        html = markdown_to_html_node(md).to_html()
+        self.assertEqual(html, "<div><h1>Title with <b>bold</b></h1></div>")
+
+    def test_blockquote(self):
+        md = "> This is a quote\n> with **bold** text"
+        html = markdown_to_html_node(md).to_html()
+        self.assertEqual(
+            html,
+            "<div><blockquote><p>This is a quote with <b>bold</b> text</p></blockquote></div>",
+        )
+
+    def test_unordered_list(self):
+        md = "- item one\n- item **two**"
+        html = markdown_to_html_node(md).to_html()
+        self.assertEqual(
+            html,
+            "<div><ul><li>item one</li><li>item <b>two</b></li></ul></div>",
+        )
+
+    def test_ordered_list(self):
+        md = "1. first\n2. second with _italic_"
+        html = markdown_to_html_node(md).to_html()
+        self.assertEqual(
+            html,
+            "<div><ol><li>first</li><li>second with <i>italic</i></li></ol></div>",
+        )
+
+    def test_inline_link_and_image(self):
+        md = "A [link](https://boot.dev) and ![img](https://example.com/a.png)"
+        html = markdown_to_html_node(md).to_html()
+        self.assertEqual(
+            html,
+            '<div><p>A <a href="https://boot.dev">link</a> and <img src="https://example.com/a.png" alt="img"></p></div>',
         )
 
 if __name__ == "__main__":
