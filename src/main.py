@@ -54,10 +54,10 @@ def generate_page(from_path: str, template_path: str, dest_path: str) -> None:
         f.write(page)
 
 
-def generate_pages_recursive(content_dir: str, template_path: str, dest_dir: str) -> None:
-    for filename in os.listdir(content_dir):
-        from_path = os.path.join(content_dir, filename)
-        dest_path = os.path.join(dest_dir, filename)
+def generate_pages_recursive(dir_path_content: str, template_path: str, dest_dir_path: str) -> None:
+    for filename in os.listdir(dir_path_content):
+        from_path = os.path.join(dir_path_content, filename)
+        dest_path = os.path.join(dest_dir_path, filename)
 
         if os.path.isfile(from_path):
             if from_path.endswith(".md"):
