@@ -24,6 +24,10 @@ class LeafNode(HTMLNode):
         super().__init__(tag, value, None, props)
 
     def to_html(self):
+        if self.tag == "img":
+            if not self.props:
+                raise ValueError("img leaf nodes must have props")
+            return f"<{self.tag}{self.props_to_html()}>"
         if not self.value:
             raise ValueError("All leaf nodes must have a value")
         if not self.tag:
@@ -40,8 +44,7 @@ class ParentNode(HTMLNode):
         result_string = f"<{self.tag}>"
         if not self.tag:
             raise ValueError("All parent nodes must have a tag")
-        if not self.children:
-            raise ValueError("All parent nodes must have children")
-        for child in self.children:
-            result_string += f"{child.to_html()}"
+        if self.children:
+            for child in self.children:
+                result_string += f"{child.to_html()}"
         return result_string + f"</{self.tag}>"
