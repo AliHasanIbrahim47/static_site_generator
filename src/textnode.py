@@ -1,7 +1,6 @@
 import re
 from enum import Enum
-from htmlnode import LeafNode
-from htmlnode import ParentNode, LeafNode
+from htmlnode import LeafNode, ParentNode
 
 class TextType(Enum):
     TEXT = "text"
@@ -31,7 +30,10 @@ class TextNode():
         return False
     
     def __repr__(self):
-        return f"TextNode({self.text}, {self.text_type.value}, {self.url})"
+        if self.url:
+            return f"TextNode({self.text}, {self.text_type.value}, {self.url})"
+        else:
+            return f"TextNode({self.text}, {self.text_type.value})"
     
 def text_node_to_html_node(text_node):
     if text_node.text_type == TextType.TEXT:
@@ -56,19 +58,30 @@ def split_nodes_delimiter(old_nodes, delimiter, text_type):
             continue
 
         parts = old_node.text.split(delimiter)
+        if len(parts) % 2 == 0:
+            raise Exception(
+                f"Invalid markdown syntax: unmatched delimiter {delimiter!r} in {old_node.text!r}"
+            )
+
+        split_nodes = []
         for i, part in enumerate(parts):
             if part == "":
-                new_nodes.append(TextNode(part, TextType.TEXT))
+                split_nodes.append(TextNode(part, TextType.TEXT))
             elif i % 2 == 1:
-                new_nodes.append(TextNode(part, text_type))
+                split_nodes.append(TextNode(part, text_type))
             else:
-                new_nodes.append(TextNode(part, TextType.TEXT))
+                split_nodes.append(TextNode(part, TextType.TEXT))
+        new_nodes.extend(split_nodes)
 
     return new_nodes
 
 def split_nodes_image(old_nodes):
     new_nodes = []
     for old_node in old_nodes:
+        if old_node.text_type != TextType.TEXT:
+            new_nodes.append(old_node)
+            continue
+
         text = old_node.text
         images = extract_markdown_images(text)
 
@@ -80,15 +93,13 @@ def split_nodes_image(old_nodes):
 
         for alt, url in images:
             image_markdown = f"![{alt}]({url})"
+            sections = remaining_text.split(image_markdown, 1)
 
-            before, after = remaining_text.split(image_markdown, 1)
-
-            if before:
-                new_nodes.append(TextNode(before, TextType.TEXT))
+            if sections[0]:
+                new_nodes.append(TextNode(sections[0], TextType.TEXT))
 
             new_nodes.append(TextNode(alt, TextType.IMAGE, url))
-
-            remaining_text = after
+            remaining_text = sections[1]
 
         if remaining_text:
             new_nodes.append(TextNode(remaining_text, TextType.TEXT))
@@ -98,6 +109,10 @@ def split_nodes_image(old_nodes):
 def split_nodes_link(old_nodes):
     new_nodes = []
     for old_node in old_nodes:
+        if old_node.text_type != TextType.TEXT:
+            new_nodes.append(old_node)
+            continue
+
         text = old_node.text
         links = extract_markdown_links(text)
 
@@ -109,15 +124,13 @@ def split_nodes_link(old_nodes):
 
         for label, url in links:
             link_markdown = f"[{label}]({url})"
+            sections = remaining_text.split(link_markdown, 1)
 
-            before, after = remaining_text.split(link_markdown, 1)
-
-            if before:
-                new_nodes.append(TextNode(before, TextType.TEXT))
+            if sections[0]:
+                new_nodes.append(TextNode(sections[0], TextType.TEXT))
 
             new_nodes.append(TextNode(label, TextType.LINK, url))
-
-            remaining_text = after
+            remaining_text = sections[1]
 
         if remaining_text:
             new_nodes.append(TextNode(remaining_text, TextType.TEXT))
@@ -180,6 +193,9 @@ def markdown_to_html_node(markdown):
     children = []
 
     for block in markdown_blocks:
+        if not block:
+            continue
+
         block_type = block_to_block_type(block)
 
         if block_type == BlockType.HEADING:
